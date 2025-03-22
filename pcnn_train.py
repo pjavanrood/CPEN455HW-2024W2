@@ -12,6 +12,7 @@ from tqdm import tqdm
 from pprint import pprint
 import argparse
 from pytorch_fid.fid_score import calculate_fid_given_paths
+import logging
 
 import dotenv
 dotenv.load_dotenv()
@@ -27,9 +28,11 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
     loss_tracker = mean_tracker()
     
     for batch_idx, item in enumerate(tqdm(data_loader)):
-        model_input, _ = item
+        model_input, label = item
+        labels_id = torch.tensor([(my_bidict[label_name] if label_name in my_bidict else len(my_bidict + 1)) for label_name in label])
         model_input = model_input.to(device)
-        model_output = model(model_input)
+        labels_id = labels_id.to(device)
+        model_output = model(model_input, labels_id)
         loss = loss_op(model_input, model_output)
         loss_tracker.update(loss.item()/deno)
         if mode == 'training':
@@ -43,6 +46,8 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
         wandb.log({mode + "-epoch": epoch})
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
     parser = argparse.ArgumentParser()
     
     parser.add_argument('-w', '--en_wandb', type=bool, default=False,

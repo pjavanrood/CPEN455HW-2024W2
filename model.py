@@ -1,8 +1,10 @@
 import torch.nn as nn
 from layers import *
+import logging
 
 
 class PixelCNNLayer_up(nn.Module):
+    _logger = logging.getLogger('PixelCNNLayer_up')
     def __init__(self, nr_resnet, nr_filters, resnet_nonlinearity):
         super(PixelCNNLayer_up, self).__init__()
         self.nr_resnet = nr_resnet
@@ -20,6 +22,10 @@ class PixelCNNLayer_up(nn.Module):
         u_list, ul_list = [], []
 
         for i in range(self.nr_resnet):
+            self._logger.debug('iteration %s', i)
+            self._logger.debug('u shape: %s', u.shape)
+            self._logger.debug('ul shape: %s', ul.shape)
+
             u  = self.u_stream[i](u)
             ul = self.ul_stream[i](ul, a=u)
             u_list  += [u]
@@ -29,6 +35,7 @@ class PixelCNNLayer_up(nn.Module):
 
 
 class PixelCNNLayer_down(nn.Module):
+    _logger = logging.getLogger('PixelCNNLayer_down')
     def __init__(self, nr_resnet, nr_filters, resnet_nonlinearity):
         super(PixelCNNLayer_down, self).__init__()
         self.nr_resnet = nr_resnet
@@ -44,6 +51,10 @@ class PixelCNNLayer_down(nn.Module):
 
     def forward(self, u, ul, u_list, ul_list):
         for i in range(self.nr_resnet):
+            self._logger.debug('iteration %s', i)
+            self._logger.debug('u shape: %s', u.shape)
+            self._logger.debug('ul shape: %s', ul.shape)
+
             u  = self.u_stream[i](u, a=u_list.pop())
             ul = self.ul_stream[i](ul, a=torch.cat((u, ul_list.pop()), 1))
 
@@ -51,8 +62,9 @@ class PixelCNNLayer_down(nn.Module):
 
 
 class PixelCNN(nn.Module):
+    _logger = logging.getLogger('PixelCNN')
     def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
-                    resnet_nonlinearity='concat_elu', input_channels=3):
+                    resnet_nonlinearity='concat_elu', input_channels=3, num_classes=5):
         super(PixelCNN, self).__init__()
         if resnet_nonlinearity == 'concat_elu' :
             self.resnet_nonlinearity = lambda x : concat_elu(x)
@@ -96,8 +108,18 @@ class PixelCNN(nn.Module):
         self.nin_out = nin(nr_filters, num_mix * nr_logistic_mix)
         self.init_padding = None
 
+        self.num_classes = num_classes
+        self.embeddings = None
 
-    def forward(self, x, sample=False):
+
+    def forward(self, x, label, sample=False):
+        b, c, h, w = x.size()
+
+        if self.embeddings is None:
+            self.embeddings = nn.Embedding(self.num_classes, c * h * w)
+
+        x += self.embeddings(torch.tensor(label)).view(-1, c, h, w)
+
         # similar as done in the tf repo :
         if self.init_padding is not sample:
             xs = [int(y) for y in x.size()]
@@ -110,18 +132,28 @@ class PixelCNN(nn.Module):
             padding = padding.cuda() if x.is_cuda else padding
             x = torch.cat((x, padding), 1)
 
+        self._logger.debug('label: %s', label)
+
         ###      UP PASS    ###
         x = x if sample else torch.cat((x, self.init_padding), 1)
+        self._logger.debug('after cat x shape: %s', x.shape)
         u_list  = [self.u_init(x)]
         ul_list = [self.ul_init[0](x) + self.ul_init[1](x)]
         for i in range(3):
+            self._logger.debug('up pass iteration %s', i)
+            self._logger.debug('u_list[-1] shape: %s', u_list[-1].shape)
+            self._logger.debug('ul_list[-1] shape: %s', ul_list[-1].shape)
+            self._logger.debug('size of u_list: %s', len(u_list))
             # resnet block
             u_out, ul_out = self.up_layers[i](u_list[-1], ul_list[-1])
+            self._logger.debug('u_out shape: %s', u_out[-1].shape)
+            self._logger.debug('ul_out shape: %s', ul_out[-1].shape)
             u_list  += u_out
             ul_list += ul_out
 
             if i != 2:
                 # downscale (only twice)
+                self._logger.debug('downscale...')
                 u_list  += [self.downsize_u_stream[i](u_list[-1])]
                 ul_list += [self.downsize_ul_stream[i](ul_list[-1])]
 
@@ -130,11 +162,18 @@ class PixelCNN(nn.Module):
         ul = ul_list.pop()
 
         for i in range(3):
+            self._logger.debug('down pass iteration %s', i)
+            self._logger.debug('u shape: %s', u.shape)
+            self._logger.debug('ul shape: %s', ul.shape)
+            self._logger.debug('size of u_list: %s', len(u_list))
             # resnet block
             u, ul = self.down_layers[i](u, ul, u_list, ul_list)
+            self._logger.debug('u shape: %s', u.shape)
+            self._logger.debug('ul shape: %s', ul.shape)
 
             # upscale (only twice)
             if i != 2 :
+                self._logger.debug('upscale...')
                 u  = self.upsize_u_stream[i](u)
                 ul = self.upsize_ul_stream[i](ul)
 
