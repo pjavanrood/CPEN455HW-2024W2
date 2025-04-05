@@ -112,28 +112,17 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        
-        self.early_u_embeddings = nn.Embedding(num_classes, nr_filters * 32 * 32)
-        self.early_ul_embeddings = nn.Embedding(num_classes, nr_filters * 32 * 32)
 
         self.middle_u_embeddings = nn.Embedding(num_classes, nr_filters * 8 * 8)
         self.middle_ul_embeddings = nn.Embedding(num_classes, nr_filters * 8 * 8)
-
-        self.late_ul_embeddings = nn.Embedding(num_classes, nr_filters * 32 * 32)
-
 
 
     def forward(self, x, labels, sample=False):
         labels_tensor = torch.tensor([(my_bidict[label] if label in my_bidict else 4) for label in labels], device=x.device)
         b, c, h, w = x.size()
 
-        early_u_embeddings = self.early_u_embeddings(labels_tensor).view(-1, self.nr_filters, 32, 32)
-        early_ul_embeddings = self.early_ul_embeddings(labels_tensor).view(-1, self.nr_filters, 32, 32)
-
         middle_u_embeddings = self.middle_u_embeddings(labels_tensor).view(-1, self.nr_filters, 8, 8)
         middle_ul_embeddings = self.middle_ul_embeddings(labels_tensor).view(-1, self.nr_filters, 8, 8)
-
-        late_ul_embeddings = self.late_ul_embeddings(labels_tensor).view(-1, self.nr_filters, 32, 32)
 
         # similar as done in the tf repo :
         if self.init_padding is not sample:
@@ -154,10 +143,6 @@ class PixelCNN(nn.Module):
         self._logger.debug('after cat x shape: %s', x.shape)
         u_list  = [self.u_init(x)]
         ul_list = [self.ul_init[0](x) + self.ul_init[1](x)]
-
-        ## Early Fusion
-        u_list[0] += early_u_embeddings
-        ul_list[0] += early_ul_embeddings
 
         for i in range(3):
             self._logger.debug('up pass iteration %s', i)
@@ -200,9 +185,6 @@ class PixelCNN(nn.Module):
                 self._logger.debug('upscale...')
                 u  = self.upsize_u_stream[i](u)
                 ul = self.upsize_ul_stream[i](ul)
-
-        ## Late Fusion
-        ul += late_ul_embeddings
 
         x_out = self.nin_out(F.elu(ul))
 

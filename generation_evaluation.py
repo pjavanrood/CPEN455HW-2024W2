@@ -23,14 +23,14 @@ import argparse
 # You should save the generated images to the gen_data_dir, which is fixed as 'samples'
 sample_op = lambda x : sample_from_discretized_mix_logistic(x, 5)
 def my_sample(model, gen_data_dir, sample_batch_size = 25, obs = (3,32,32), sample_op = sample_op):
-    images = []
+    images = {}
     for label, class_index in my_bidict.items():
         print(f"Label: {label}")
         #generate images for each label, each label has 25 images
         sample_t = sample(model, [label], sample_batch_size, obs, sample_op)
         sample_t = rescaling_inv(sample_t)
         save_images(sample_t, os.path.join(gen_data_dir), label=label)
-        images.append(sample_t)
+        images[label] = sample_t
     return images
 # End of your code
 
@@ -51,7 +51,9 @@ if __name__ == "__main__":
 
     #TODO: Begin of your code
     #Load your model and generate images in the gen_data_dir, feel free to modify the model
-    model = PixelCNN(nr_resnet=1, nr_filters=40, input_channels=3, nr_logistic_mix=5)
+    model = PixelCNN(nr_resnet=1, nr_filters=40,
+            input_channels=3, nr_logistic_mix=5)
+    model.load_state_dict(torch.load('models/pcnn_cpen455_from_scratch_49.pth'))
     model = model.to(device)
     model = model.eval()
     #End of your code
