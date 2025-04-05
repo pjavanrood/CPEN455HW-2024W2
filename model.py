@@ -1,6 +1,9 @@
 import torch.nn as nn
 from layers import *
+from dataset import *
 import logging
+
+from zmq import device
 
 
 class PixelCNNLayer_up(nn.Module):
@@ -109,16 +112,28 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        self.embeddings = None
+        
+        self.early_u_embeddings = nn.Embedding(num_classes, nr_filters * 32 * 32)
+        self.early_ul_embeddings = nn.Embedding(num_classes, nr_filters * 32 * 32)
+
+        self.middle_u_embeddings = nn.Embedding(num_classes, nr_filters * 8 * 8)
+        self.middle_ul_embeddings = nn.Embedding(num_classes, nr_filters * 8 * 8)
+
+        self.late_ul_embeddings = nn.Embedding(num_classes, nr_filters * 32 * 32)
 
 
-    def forward(self, x, label, sample=False):
+
+    def forward(self, x, labels, sample=False):
+        labels_tensor = torch.tensor([(my_bidict[label] if label in my_bidict else 4) for label in labels], device=x.device)
         b, c, h, w = x.size()
 
-        if self.embeddings is None:
-            self.embeddings = nn.Embedding(self.num_classes, c * h * w)
+        early_u_embeddings = self.early_u_embeddings(labels_tensor).view(-1, self.nr_filters, 32, 32)
+        early_ul_embeddings = self.early_ul_embeddings(labels_tensor).view(-1, self.nr_filters, 32, 32)
 
-        x += self.embeddings(torch.tensor(label)).view(-1, c, h, w)
+        middle_u_embeddings = self.middle_u_embeddings(labels_tensor).view(-1, self.nr_filters, 8, 8)
+        middle_ul_embeddings = self.middle_ul_embeddings(labels_tensor).view(-1, self.nr_filters, 8, 8)
+
+        late_ul_embeddings = self.late_ul_embeddings(labels_tensor).view(-1, self.nr_filters, 32, 32)
 
         # similar as done in the tf repo :
         if self.init_padding is not sample:
@@ -132,13 +147,18 @@ class PixelCNN(nn.Module):
             padding = padding.cuda() if x.is_cuda else padding
             x = torch.cat((x, padding), 1)
 
-        self._logger.debug('label: %s', label)
+        self._logger.debug('labels: %s', labels)
 
         ###      UP PASS    ###
         x = x if sample else torch.cat((x, self.init_padding), 1)
         self._logger.debug('after cat x shape: %s', x.shape)
         u_list  = [self.u_init(x)]
         ul_list = [self.ul_init[0](x) + self.ul_init[1](x)]
+
+        ## Early Fusion
+        u_list[0] += early_u_embeddings
+        ul_list[0] += early_ul_embeddings
+
         for i in range(3):
             self._logger.debug('up pass iteration %s', i)
             self._logger.debug('u_list[-1] shape: %s', u_list[-1].shape)
@@ -161,6 +181,10 @@ class PixelCNN(nn.Module):
         u  = u_list.pop()
         ul = ul_list.pop()
 
+        ## Middle Fusion
+        u += middle_u_embeddings
+        ul += middle_ul_embeddings
+
         for i in range(3):
             self._logger.debug('down pass iteration %s', i)
             self._logger.debug('u shape: %s', u.shape)
@@ -176,6 +200,9 @@ class PixelCNN(nn.Module):
                 self._logger.debug('upscale...')
                 u  = self.upsize_u_stream[i](u)
                 ul = self.upsize_ul_stream[i](ul)
+
+        ## Late Fusion
+        ul += late_ul_embeddings
 
         x_out = self.nin_out(F.elu(ul))
 
