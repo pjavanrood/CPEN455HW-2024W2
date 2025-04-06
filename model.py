@@ -1,6 +1,9 @@
+import torch
 import torch.nn as nn
 from layers import *
 from dataset import *
+import utils
+import dataset
 import logging
 
 from zmq import device
@@ -191,7 +194,41 @@ class PixelCNN(nn.Module):
         assert len(u_list) == len(ul_list) == 0, pdb.set_trace()
 
         return x_out
-    
+
+class ClassifierWrapper(nn.Module):
+    def __init__(self, pretrained_model_path, num_classes, freeze_pretrained=True):
+        """
+        Args:
+            pretrained_model: The pre-trained model that outputs a distribution
+            num_classes: Number of classes for the final classification
+            freeze_pretrained: Whether to freeze the pretrained model's weights
+        """
+        super(ClassifierWrapper, self).__init__()
+
+        self.pretrained_model = PixelCNN(nr_resnet=1, nr_filters=40,
+            input_channels=3, nr_logistic_mix=5)
+        self.pretrained_model.load_state_dict(torch.load(pretrained_model_path))
+        self.pretrained_model = self.pretrained_model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        self.pretrained_model = self.pretrained_model.eval()
+        self.num_classes = num_classes
+        
+    def forward(self, x):
+        """
+        Forward pass of the wrapper model
+        Args:
+            x: Input image tensor
+        Returns:
+            Classification output
+        """
+        batch_size = x.shape[0]
+        log_likelihoods = torch.zeros((batch_size, self.num_classes), device=x.device)
+        for class_label, i in dataset.my_bidict.items():
+          # breakpoint()
+          model_output = self.pretrained_model(x, [class_label])
+          loss = utils.discretized_mix_logistic_loss(x, model_output).item()
+          log_likelihoods[:, i] = loss
+        
+        return torch.argmin(log_likelihoods, dim=1)
     
 class random_classifier(nn.Module):
     def __init__(self, NUM_CLASSES):

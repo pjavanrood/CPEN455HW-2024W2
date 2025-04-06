@@ -18,13 +18,16 @@ from tqdm import tqdm
 from pprint import pprint
 import argparse
 import csv
+import os
+import pandas as pd
+import logging
 NUM_CLASSES = len(my_bidict)
 
 #TODO: Begin of your code
 def get_label(model, model_input, device):
     # Write your code here, replace the random classifier with your trained model
     # and return the predicted label, which is a tensor of shape (batch_size,)
-    answer = model(model_input, device)
+    answer = model(model_input)
     return answer
 # End of your code
 
@@ -34,13 +37,28 @@ def classifier(model, data_loader, device):
     for batch_idx, item in enumerate(tqdm(data_loader)):
         model_input, categories = item
         model_input = model_input.to(device)
-        original_label = [my_bidict[item] for item in categories]
+        original_label = [my_bidict[item] if item in my_bidict else 4 for item in categories]
         original_label = torch.tensor(original_label, dtype=torch.int64).to(device)
         answer = get_label(model, model_input, device)
         correct_num = torch.sum(answer == original_label)
+        print("A: ", answer)
+        print("O: ", original_label)
+        print()
         acc_tracker.update(correct_num.item(), model_input.shape[0])
     
     return acc_tracker.get_ratio()
+
+
+def predict_classification(model, data_loader, device):
+    model.eval()
+    all_answers = []
+    for batch_idx, item in enumerate(tqdm(data_loader)):
+        model_input, categories = item
+        model_input = model_input.to(device)
+        answer = get_label(model, model_input, device)
+        all_answers.extend(answer.tolist())
+    
+    return all_answers
         
 
 if __name__ == '__main__':
@@ -63,26 +81,41 @@ if __name__ == '__main__':
                                                             mode = args.mode, 
                                                             transform=ds_transforms), 
                                              batch_size=args.batch_size, 
-                                             shuffle=True, 
+                                             shuffle=False, 
                                              **kwargs)
 
     #TODO:Begin of your code
+    # logging.basicConfig(level=logging.DEBUG)
+    # logger = logging.getLogger()
+    # logger.setLevel(logging.DEBUG)
     #You should replace the random classifier with your trained model
-    model = random_classifier(NUM_CLASSES)
+    model_path = os.path.join(os.path.dirname(__file__), 'models/pcnn_cpen455_from_scratch_49.pth')
+    model = ClassifierWrapper(model_path, NUM_CLASSES)
     #End of your code
     
     model = model.to(device)
     #Attention: the path of the model is fixed to './models/conditional_pixelcnn.pth'
     #You should save your model to this path
-    model_path = os.path.join(os.path.dirname(__file__), 'models/conditional_pixelcnn.pth')
-    if os.path.exists(model_path):
-        model.load_state_dict(torch.load(model_path))
-        print('model parameters loaded')
-    else:
-        raise FileNotFoundError(f"Model file not found at {model_path}")
+    # model_path = os.path.join(os.path.dirname(__file__), 'models/conditional_pixelcnn.pth')
+    # if os.path.exists(model_path):
+    #     model.load_state_dict(torch.load(model_path))
+    #     print('model parameters loaded')
+    # else:
+    #     raise FileNotFoundError(f"Model file not found at {model_path}")
     model.eval()
     
-    acc = classifier(model = model, data_loader = dataloader, device = device)
-    print(f"Accuracy: {acc}")
+    # acc = classifier(model = model, data_loader = dataloader, device = device)
+    # print(f"Accuracy: {acc}")
+    prediction = predict_classification(model = model, data_loader = dataloader, device = device)
+
+    print(args.mode)
+
+    test_df = pd.read_csv("test.csv", header=None)
+    test_df[1] = prediction
+
+    test_df.to_csv('test_pred.csv', header=None)
+
+    print(prediction)
+
         
         
