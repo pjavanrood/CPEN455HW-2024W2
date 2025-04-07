@@ -89,7 +89,7 @@ if __name__ == '__main__':
     # logger = logging.getLogger()
     # logger.setLevel(logging.DEBUG)
     #You should replace the random classifier with your trained model
-    model_path = os.path.join(os.path.dirname(__file__), 'models/pcnn_cpen455_from_scratch_49.pth')
+    model_path = os.path.join(os.path.dirname(__file__), 'models/pcnn_cpen455_from_scratch_29.pth')
     model = ClassifierWrapper(model_path, NUM_CLASSES)
     #End of your code
     
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     test_df = pd.read_csv("test.csv", header=None)
     test_df[1] = prediction
 
-    test_df.to_csv('test_pred.csv', header=None)
+    test_df.to_csv('test_pred_2.csv', header=None, index=False)
 
     print(prediction)
 

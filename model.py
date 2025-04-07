@@ -205,7 +205,7 @@ class ClassifierWrapper(nn.Module):
         """
         super(ClassifierWrapper, self).__init__()
 
-        self.pretrained_model = PixelCNN(nr_resnet=1, nr_filters=40,
+        self.pretrained_model = PixelCNN(nr_resnet=5, nr_filters=80,
             input_channels=3, nr_logistic_mix=5)
         self.pretrained_model.load_state_dict(torch.load(pretrained_model_path))
         self.pretrained_model = self.pretrained_model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
