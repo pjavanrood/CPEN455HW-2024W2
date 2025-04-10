@@ -195,6 +195,97 @@ class PixelCNN(nn.Module):
 
         return x_out
 
+
+class PixelCNNClassifier(nn.Module):
+    _logger = logging.getLogger('PixelCNNClassifier')
+    def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
+                    resnet_nonlinearity='concat_elu', input_channels=3, num_classes=5):
+        super(PixelCNNClassifier, self).__init__()
+        if resnet_nonlinearity == 'concat_elu' :
+            self.resnet_nonlinearity = lambda x : concat_elu(x)
+        else :
+            raise Exception('right now only concat elu is supported as resnet nonlinearity.')
+
+        self.nr_filters = nr_filters
+        self.input_channels = input_channels
+        self.nr_logistic_mix = nr_logistic_mix
+        self.right_shift_pad = nn.ZeroPad2d((1, 0, 0, 0))
+        self.down_shift_pad  = nn.ZeroPad2d((0, 0, 1, 0))
+        
+        self.up_layers   = nn.ModuleList([PixelCNNLayer_up(nr_resnet, nr_filters,
+                                                self.resnet_nonlinearity) for _ in range(3)])
+
+        self.downsize_u_stream  = nn.ModuleList([down_shifted_conv2d(nr_filters, nr_filters,
+                                                    stride=(2,2)) for _ in range(2)])
+
+        self.downsize_ul_stream = nn.ModuleList([down_right_shifted_conv2d(nr_filters,
+                                                    nr_filters, stride=(2,2)) for _ in range(2)])
+
+        self.u_init = down_shifted_conv2d(input_channels + 1, nr_filters, filter_size=(2,3),
+                        shift_output_down=True)
+
+        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 1, nr_filters,
+                                            filter_size=(1,3), shift_output_down=True),
+                                       down_right_shifted_conv2d(input_channels + 1, nr_filters,
+                                            filter_size=(2,1), shift_output_right=True)])
+        input_dim = 2 * nr_filters
+        hidden_dim = 512
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+        num_mix = 3 if self.input_channels == 1 else 10
+        self.init_padding = None
+
+        self.num_classes = num_classes
+
+    def forward(self, x):
+        xs = [int(y) for y in x.size()]
+        padding = Variable(torch.ones(xs[0], 1, xs[2], xs[3]), requires_grad=False)
+        self.init_padding = padding.cuda() if x.is_cuda else padding
+
+        # with torch.no_grad():
+        ###      UP PASS    ###
+        x = torch.cat((x, self.init_padding), 1)
+        self._logger.debug('after cat x shape: %s', x.shape)
+        u_list  = [self.u_init(x)]
+        ul_list = [self.ul_init[0](x) + self.ul_init[1](x)]
+
+        for i in range(3):
+            self._logger.debug('up pass iteration %s', i)
+            self._logger.debug('u_list[-1] shape: %s', u_list[-1].shape)
+            self._logger.debug('ul_list[-1] shape: %s', ul_list[-1].shape)
+            self._logger.debug('size of u_list: %s', len(u_list))
+            # resnet block
+            u_out, ul_out = self.up_layers[i](u_list[-1], ul_list[-1])
+            self._logger.debug('u_out shape: %s', u_out[-1].shape)
+            self._logger.debug('ul_out shape: %s', ul_out[-1].shape)
+            u_list  += u_out
+            ul_list += ul_out
+
+            if i != 2:
+                # downscale (only twice)
+                self._logger.debug('downscale...')
+                u_list  += [self.downsize_u_stream[i](u_list[-1])]
+                ul_list += [self.downsize_ul_stream[i](ul_list[-1])]
+
+        u  = u_list.pop()
+        ul = ul_list.pop()
+
+        # Combine
+        combined = torch.cat((u, ul), dim=1)  # (B, 2 * nr_filters, H/4, W/4)
+        
+        # Pooling
+        features = combined.mean(dim=(2, 3))  # (B, 2 * nr_filters)
+
+        logits = self.mlp(features)
+
+        return logits
+
 class ClassifierWrapper(nn.Module):
     def __init__(self, pretrained_model_path, num_classes, freeze_pretrained=True):
         """

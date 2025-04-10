@@ -42,7 +42,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     ref_data_dir = args.ref_data_dir
-    gen_data_dir = os.path.join(os.path.dirname(__file__), "samples_f80_l5_r5")
+    gen_data_dir = os.path.join(os.path.dirname(__file__), "samples_f80_l5_r5_e79")
     BATCH_SIZE=128
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     #Load your model and generate images in the gen_data_dir, feel free to modify the model
     model = PixelCNN(nr_resnet=5, nr_filters=80,
             input_channels=3, nr_logistic_mix=5)
-    model.load_state_dict(torch.load('models_backup_f40_l5_r5/pcnn_cpen455_f80_l5_r5.pth'))
+    model.load_state_dict(torch.load('models/pcnn_cpen455_load_model_79.pth'))
     model = model.to(device)
     model = model.eval()
     #End of your code

@@ -26,6 +26,8 @@ NUM_CLASSES = len(my_bidict)
 
 #TODO: Begin of your code
 def get_label(model, model_input, device):
+    model_output = model(model_input)
+    return torch.argmax(model_output, dim=1)
     # Write your code here, replace the random classifier with your trained model
     # and return the predicted label, which is a tensor of shape (batch_size,)
     
@@ -97,11 +99,16 @@ if __name__ == '__main__':
     #You should replace the random classifier with your trained model
     # model_path = os.path.join(os.path.dirname(__file__), 'models/pcnn_cpen455_from_scratch_29.pth')
     # model = ClassifierWrapper(model_path, NUM_CLASSES)
-    model = PixelCNN(nr_resnet=5, nr_filters=80,
-            input_channels=3, nr_logistic_mix=5)
-    model.load_state_dict(torch.load('models_backup_f40_l5_r5/pcnn_cpen455_f40_l5_r5.pth'))
-    model = model.to(device)
-    model = model.eval()
+    # model = PixelCNN(nr_resnet=5, nr_filters=80,
+    #         input_channels=3, nr_logistic_mix=5)
+    # model.load_state_dict(torch.load('models_backup_f40_l5_r5/pcnn_cpen455_f80_l5_r5.pth'))
+    # model = model.to(device)
+    # model = model.eval()
+
+
+    model = PixelCNNClassifier(nr_resnet=5, nr_filters=40,
+                input_channels=3, nr_logistic_mix=5)
+    model.load_state_dict(torch.load('models/model_Classifier_f40_l5_r5_scratch_99.pth'))
     #End of your code
     
     model = model.to(device)
@@ -124,7 +131,7 @@ if __name__ == '__main__':
     test_df = pd.read_csv("test.csv", header=None)
     test_df[1] = prediction
 
-    test_df.to_csv('test_pred_f40_l5_r5.csv', header=None, index=False)
+    test_df.to_csv('test_pred_Classifier_f40_l5_r5_scratch_99.csv', header=None, index=False)
 
     print(prediction)
 
