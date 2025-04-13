@@ -222,7 +222,7 @@ For assessing the quality of generated images, we have provided an evaluation in
 Evaluation of model performance will affect a portion of the final score, but not all of it. After deadlines, we will attempt to reproduce all submitted code, and any cheating discovered will result in deductions and appropriate actions taken. The quality of the code, the completeness of the project, and the ability to reproduce results will all be considered in determining the final score.
 
 ## Grading Rubric
-The final score is calculated based on Generation Performance, Classification Performance, Report Quality, and Bonus Points:
+The final score is calculated based on Generation Performance, Classification Performance, Report Quality, and Bonus Points. Worth mentioning is that the performance refers to the performance on the test dataset.
 
 + **Generation Performance**  
   Evaluated using Fréchet Inception Distance (FID) score of generated images  
@@ -233,7 +233,6 @@ The final score is calculated based on Generation Performance, Classification Pe
   - \> 60 FID score = 0 points
 
 + **Classification Performance**  
-  Evaluated using validation set accuracy (test set used for final grading)  
   - Linear interpolate the grades from 0 to full when the acc goes from 25% to 75%:  
     - Score = (acc - 0.25) / 0.5 * {full score of classification performance}, when acc is between 25% and 75%
   - Accuracy exceeding 75% qualifies for bonus points (see [Bonus Points section](#bonus-points))
