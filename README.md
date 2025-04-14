@@ -193,7 +193,7 @@ id, label
 ## Submission Requirements:
 You must compress the following materials into a zip file and submit it on Canvas:
 
-- [ ] **Complete project code**
+- [ ] **Complete project code(The whole code base)**
   - [ ] **Implement two evaluation scripts**:
     - [ ] `generation_evaluation.py`: 
       - Save generated images to `./samples` directory
