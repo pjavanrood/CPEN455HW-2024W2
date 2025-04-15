@@ -106,9 +106,9 @@ if __name__ == '__main__':
     # model = model.eval()
 
 
-    model = PixelCNNClassifier(nr_resnet=5, nr_filters=40,
+    model = PixelCNNClassifier(nr_resnet=5, nr_filters=80,
                 input_channels=3, nr_logistic_mix=5)
-    model.load_state_dict(torch.load('models/model_Classifier_f40_l5_r5_scratch_99.pth'))
+    model.load_state_dict(torch.load('models/model_Classifier_f80_l5_r5_scratch_119.pth'))
     #End of your code
     
     model = model.to(device)
@@ -131,7 +131,7 @@ if __name__ == '__main__':
     test_df = pd.read_csv("test.csv", header=None)
     test_df[1] = prediction
 
-    test_df.to_csv('test_pred_Classifier_f40_l5_r5_scratch_99.csv', header=None, index=False)
+    test_df.to_csv('test_pred_model_Classifier_f80_l5_r5_scratch_119.csv', header=None, index=False)
 
     print(prediction)
 
